@@ -1,3 +1,4 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -7,23 +8,29 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  HttpErrors,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
-import {Usuario} from '../models';
+import {CredencialesLogin, Usuario} from '../models';
 import {UsuarioRepository} from '../repositories';
+import {JwtService, SeguridadUsuarioService} from '../services';
 
 export class UsuarioController {
   constructor(
     @repository(UsuarioRepository)
-    public usuarioRepository : UsuarioRepository,
+    public usuarioRepository: UsuarioRepository,
+    @service(SeguridadUsuarioService)
+    private servicioSeguridad: SeguridadUsuarioService,
+    @service(JwtService)
+    private servicioJWT: JwtService,
   ) {}
 
   @post('/usuarios')
@@ -44,6 +51,10 @@ export class UsuarioController {
     })
     usuario: Omit<Usuario, '_id'>,
   ): Promise<Usuario> {
+    let claveGenerada = this.servicioSeguridad.CrearClaveAleatoria();
+    let claveCifrada = this.servicioSeguridad.CifrarCadena(claveGenerada);
+    usuario.clave = claveCifrada;
+    // notificar al usuario de que se ha creado en el sistema
     return this.usuarioRepository.create(usuario);
   }
 
@@ -52,9 +63,7 @@ export class UsuarioController {
     description: 'Usuario model count',
     content: {'application/json': {schema: CountSchema}},
   })
-  async count(
-    @param.where(Usuario) where?: Where<Usuario>,
-  ): Promise<Count> {
+  async count(@param.where(Usuario) where?: Where<Usuario>): Promise<Count> {
     return this.usuarioRepository.count(where);
   }
 
@@ -106,7 +115,8 @@ export class UsuarioController {
   })
   async findById(
     @param.path.string('id') id: string,
-    @param.filter(Usuario, {exclude: 'where'}) filter?: FilterExcludingWhere<Usuario>
+    @param.filter(Usuario, {exclude: 'where'})
+    filter?: FilterExcludingWhere<Usuario>,
   ): Promise<Usuario> {
     return this.usuarioRepository.findById(id, filter);
   }
@@ -146,5 +156,66 @@ export class UsuarioController {
   })
   async deleteById(@param.path.string('id') id: string): Promise<void> {
     await this.usuarioRepository.deleteById(id);
+  }
+
+  /**
+   * Bloque de Métodos personalizados para la seguridad del usuario
+   */
+
+  @post('/login')
+  @response(200, {
+    description: 'Identificación de Usuarios',
+    content: {
+      'application/json': {schema: getModelSchemaRef(CredencialesLogin)},
+    },
+  })
+  async identificar(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(CredencialesLogin),
+        },
+      },
+    })
+    credenciales: CredencialesLogin,
+  ): Promise<string> {
+    try {
+      return this.servicioSeguridad.IdentificarUsuario(credenciales);
+    } catch (err) {
+      throw new HttpErrors[400](
+        `Se ha generado un error en la validación de las credenciales para el usuario ${credenciales.correo}`,
+      );
+    }
+  }
+
+  @get('/validate-token/{jwt}')
+  @response(200, {
+    description: 'Validar un token JWT',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Object),
+      },
+    },
+  })
+  async validateJWT(@param.path.string('jwt') jwt: string): Promise<string> {
+    let valido = this.servicioJWT.ValidarToken(jwt);
+    console.log('Rol: ' + valido);
+    return valido;
+  }
+
+  @get('/check-session-token/{jwt}')
+  @response(200, {
+    description: 'Validar un token JWT',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Object),
+      },
+    },
+  })
+  async checkSessionJWT(
+    @param.path.string('jwt') jwt: string,
+  ): Promise<boolean> {
+    let roleId = await this.servicioJWT.ValidarToken(jwt);
+    return roleId != '';
   }
 }

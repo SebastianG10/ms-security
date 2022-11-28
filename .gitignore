@@ -65,3 +65,5 @@ typings/
 
 # Database Configuration
 mongodb.datasource.ts
+
+config

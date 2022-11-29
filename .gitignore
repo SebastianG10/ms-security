@@ -67,3 +67,5 @@ typings/
 mongodb.datasource.ts
 
 config
+
+.env

@@ -1,10 +1,10 @@
-import {/* inject, */ BindingScope, injectable, service} from '@loopback/core';
+import { /* inject, */ BindingScope, injectable, service} from '@loopback/core';
 import {repository} from '@loopback/repository';
 import {HttpErrors} from '@loopback/rest';
 import fetch from 'node-fetch';
 import {Keys} from '../config/keys';
 import {CredencialesLogin, CredencialesRecuperarClave} from '../models';
-import {UsuarioRepository} from '../repositories';
+import {Codigo2FaRepository, UsuarioRepository} from '../repositories';
 import {JwtService} from './jwt.service';
 var generator = require('generate-password');
 var MD5 = require('crypto-js/md5');
@@ -14,41 +14,60 @@ export class SeguridadUsuarioService {
   constructor(
     @repository(UsuarioRepository)
     private usuarioRepository: UsuarioRepository,
+
+    @repository(Codigo2FaRepository)
+    private codigo2FARepositorio: Codigo2FaRepository,
+
     @service(JwtService)
     private servicioJwt: JwtService,
-  ) {}
+  ) { }
 
+  // TODO?[01]: Creación de validación de usuario para el ingreso al sistema.
   /**
    * Método para la autenticación de usuarios
    * @param credenciales credenciales de acceso
    * @returns una cadena con el token cuando todo está bien, o una cadena vacía cuando no coinciden las credenciales
    */
-  async IdentificarUsuario(credenciales: CredencialesLogin): Promise<string> {
-    let respuesta = '';
+  async identificarUsuario(credenciales: CredencialesLogin): Promise<object> {
+    //? MODIFICACIÖN
+    let res = {
+      token: '',
+      user: {
+        nombre: '',
+        correo: '',
+        rol: '',
+        id: '',
+      }
+    }
 
-    let usuario = await this.usuarioRepository.findOne({
+    let usuarioValido = await this.usuarioRepository.findOne({
       where: {
         correo: credenciales.correo,
         clave: credenciales.clave,
       },
     });
 
-    if (usuario) {
+    if (usuarioValido) {
       let datos = {
-        nombre: `${usuario.nombres} ${usuario.apellidos}`,
-        correo: usuario.correo,
-        rol: usuario.rolId,
+        nombre: `${usuarioValido.nombres} ${usuarioValido.apellidos}`,
+        correo: usuarioValido.correo,
+        rol: usuarioValido.rolId,
+        id: usuarioValido._id ? usuarioValido._id : '',
       };
       try {
-        respuesta = this.servicioJwt.CrearToken(datos);
-        console.log(respuesta);
+        let tk = this.servicioJwt.crearToken(datos);
+        console.log('res1', res);
+        res.token = tk
+        res.user = datos
+        console.log('res2', res);
+
       } catch (err) {
         throw err;
       }
     }
-
-    return respuesta;
+    return res;
   }
+
 
   /**
    * Genera una clave aleatoria
@@ -63,6 +82,19 @@ export class SeguridadUsuarioService {
     });
     console.log(password);
     return password;
+  }
+
+  /**
+   * Genera una clave aleatoria
+   * @returns clave generada
+   */
+  CrearCodigoAleatorio(): string {
+    let code = generator.generate({
+      length: 4,
+      numbers: true,
+    });
+    // console.log(password);
+    return code;
   }
 
   CifrarCadena(cadena: string): string {
@@ -114,4 +146,123 @@ export class SeguridadUsuarioService {
       );
     }
   }
+
+  /* Métodos para el doble factor de autenticación */
+
+
+  /**
+   * verifica el usuario y le envia el codigo
+   * @param credenciales credenciales de login
+   * @returns
+   */
+  async envioCodigo(credenciales: CredencialesLogin): Promise<boolean> {
+    const params = new URLSearchParams()
+    let res = ""
+
+    let usuario = await this.usuarioRepository.findOne({
+      where: {
+        email: credenciales.correo,
+        clave: credenciales.clave
+      }
+    }
+    );
+
+    if (usuario) {
+      //Generación del código
+      let codigoAleatorio = this.CrearCodigoAleatorio();
+      //Guardar codigo en la base de datos
+      let codigo = {
+        "id_usuario": usuario._id,
+        "codigo": codigoAleatorio,
+        "estado": true
+      }
+
+      let resPostCodigo = ''
+
+      await fetch(Keys.url2FA, {
+        method: 'POST',
+        body: JSON.stringify(codigo),
+        headers: {"Content-Type": "application/json"}
+      }).then(async (res: any) => {
+        resPostCodigo = await res.text()
+        console.log("codigo de verificación: " + codigoAleatorio)
+        console.log("resPostCodigo: " + resPostCodigo)
+      });
+
+      // envio del codigo
+      let mensaje = {
+        "mensaje": `Hola ${usuario.nombres}, tu codigo de verificion es`,
+        "codigo": `${codigoAleatorio}`
+      }
+      console.log(mensaje);
+
+      let r = '';
+
+      params.append('hash_validator', 'Admin@notification.sender');
+      params.append('destination', usuario.correo);
+      params.append('subject', Keys.mensaje2FA);
+      params.append('message', JSON.stringify(mensaje));
+      console.log(params)
+
+      await fetch(Keys.urlEnviarCorreo, {method: 'POST', body: params}).then(async (res: any) => {
+        r = await res.text()
+        console.log("r: " + r)
+      });
+
+      return r == "OK";
+    } else {
+      throw new HttpErrors[400]("El usuario o la contraseña ingresada son invalidos.");
+    }
+  }
+
+
+  /**
+   * valida el codigo de doble factor
+   * @param codigo el codigo de verificación de usuario
+   * @returns true o false
+   */
+  async ValidarCodigo(codigo: number): Promise<object> {
+    let code = await this.codigo2FARepositorio.findOne({
+      where: {
+        codigo: codigo,
+      },
+    });
+    if (code && code.estado) {
+      let usuario = await this.usuarioRepository.findOne({
+        where: {
+          _id: code.idUsuario,
+        },
+      });
+
+      if (usuario) {
+        //creación del token y asignación a respuesta
+        let datos = {
+          id: usuario._id,
+          nombre: `${usuario.nombres} ${usuario.apellidos}`,
+          correo: usuario.correo,
+          rol: usuario.rolId,
+          // isLogged: false
+        }
+        try {
+          code.estado = false;
+          this.codigo2FARepositorio.updateById(code._id, code)
+          let respuesta = {
+            Token: this.servicioJwt.crearToken(datos),
+            User: datos
+          }
+          console.log(respuesta);
+          return respuesta;
+        } catch (err) {
+          throw err;
+        }
+      } else {
+        return {error: "Usuario no registrado"}
+      }
+    } else {
+      return {error: "El código es invalido"}
+    }
+  }
+
 }
+
+

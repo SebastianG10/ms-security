@@ -3,7 +3,7 @@ import {
   Entity,
   hasMany,
   model,
-  property,
+  property
 } from '@loopback/repository';
 import {AuditoriaLogin} from './auditoria-login.model';
 import {Rol} from './rol.model';

@@ -1,17 +1,17 @@
-import {/* inject, */ BindingScope, injectable} from '@loopback/core';
+import { /* inject, */ BindingScope, injectable} from '@loopback/core';
 import {Keys} from '../config/keys';
 var jwt = require('jsonwebtoken');
 
 @injectable({scope: BindingScope.TRANSIENT})
 export class JwtService {
-  constructor(/* Add @inject to inject parameters */) {}
+  constructor(/* Add @inject to inject parameters */) { }
 
   /**
    * Se genera un token con la informacion en formato JWT
    * @param info datos que quedarán en el token
    * @returns token firmado con la clave secreta
    */
-  CrearToken(info: object): string {
+  crearToken(info: object): string {
     try {
       var token = jwt.sign(info, Keys.JwtSecretKey);
       return token;

@@ -5,7 +5,7 @@ import {
   Filter,
   FilterExcludingWhere,
   repository,
-  Where,
+  Where
 } from '@loopback/repository';
 import {
   del,
@@ -17,12 +17,12 @@ import {
   post,
   put,
   requestBody,
-  response,
+  response
 } from '@loopback/rest';
 import {
   CredencialesLogin,
   CredencialesRecuperarClave,
-  Usuario,
+  Usuario
 } from '../models';
 import {UsuarioRepository} from '../repositories';
 import {JwtService, SeguridadUsuarioService} from '../services';
@@ -35,7 +35,7 @@ export class UsuarioController {
     private servicioSeguridad: SeguridadUsuarioService,
     @service(JwtService)
     private servicioJWT: JwtService,
-  ) {}
+  ) { }
 
   @post('/usuarios')
   @response(200, {
@@ -166,12 +166,11 @@ export class UsuarioController {
    * Bloque de Métodos personalizados para la seguridad del usuario
    */
 
+  // TODO?[12]: Adición de controlador para búsqueda desde login con el correo y clave del usuario.
   @post('/login')
   @response(200, {
     description: 'Identificación de Usuarios',
-    content: {
-      'application/json': {schema: getModelSchemaRef(CredencialesLogin)},
-    },
+    content: {'application/json': {schema: getModelSchemaRef(CredencialesLogin)}},
   })
   async identificar(
     @requestBody({
@@ -182,13 +181,29 @@ export class UsuarioController {
       },
     })
     credenciales: CredencialesLogin,
-  ): Promise<string> {
+  ): Promise<boolean> {
     try {
-      return this.servicioSeguridad.IdentificarUsuario(credenciales);
+      // let token = await this.servicioSeguridad.identificarUsuario(credenciales)
+      // return token
+      return this.servicioSeguridad.envioCodigo(credenciales)
+
     } catch (err) {
-      throw new HttpErrors[400](
-        `Se ha generado un error en la validación de las credenciales para el usuario ${credenciales.correo}`,
-      );
+      throw new HttpErrors[400](`Se ha generado un error en la validación de las credenciales para el usuario ${credenciales.correo}`)
+    }
+  }
+
+  @post('/verificacion2fa')
+  @response(200, {
+    description: 'Identificación de Usuarios',
+    content: {'application/json': {schema: getModelSchemaRef(Object)}},
+  })
+  async autentiticar(@param.path.string('code') code: number): Promise<Object> {
+    try {
+      // let token = await this.servicioSeguridad.identificarUsuario(credenciales)
+      // return token
+      return this.servicioSeguridad.ValidarCodigo(code)
+    } catch (err) {
+      throw new HttpErrors[400](`Error de ingreso a la validación del código.`)
     }
   }
 
@@ -248,4 +263,7 @@ export class UsuarioController {
     let roleId = await this.servicioJWT.ValidarToken(jwt);
     return roleId != '';
   }
+
+  /*  */
+
 }

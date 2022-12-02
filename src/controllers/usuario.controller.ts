@@ -5,7 +5,7 @@ import {
   Filter,
   FilterExcludingWhere,
   repository,
-  Where
+  Where,
 } from '@loopback/repository';
 import {
   del,
@@ -17,12 +17,12 @@ import {
   post,
   put,
   requestBody,
-  response
+  response,
 } from '@loopback/rest';
 import {
   CredencialesLogin,
   CredencialesRecuperarClave,
-  Usuario
+  Usuario,
 } from '../models';
 import {UsuarioRepository} from '../repositories';
 import {JwtService, SeguridadUsuarioService} from '../services';
@@ -35,7 +35,7 @@ export class UsuarioController {
     private servicioSeguridad: SeguridadUsuarioService,
     @service(JwtService)
     private servicioJWT: JwtService,
-  ) { }
+  ) {}
 
   @post('/usuarios')
   @response(200, {
@@ -170,7 +170,9 @@ export class UsuarioController {
   @post('/login')
   @response(200, {
     description: 'Identificación de Usuarios',
-    content: {'application/json': {schema: getModelSchemaRef(CredencialesLogin)}},
+    content: {
+      'application/json': {schema: getModelSchemaRef(CredencialesLogin)},
+    },
   })
   async identificar(
     @requestBody({
@@ -185,25 +187,28 @@ export class UsuarioController {
     try {
       // let token = await this.servicioSeguridad.identificarUsuario(credenciales)
       // return token
-      return this.servicioSeguridad.envioCodigo(credenciales)
-
+      return this.servicioSeguridad.envioCodigo(credenciales);
     } catch (err) {
-      throw new HttpErrors[400](`Se ha generado un error en la validación de las credenciales para el usuario ${credenciales.correo}`)
+      throw new HttpErrors[400](
+        `Se ha generado un error en la validación de las credenciales para el usuario ${credenciales.correo}`,
+      );
     }
   }
 
-  @post('/verificacion2fa')
+  @post('/verificacion2fa/{codigo}')
   @response(200, {
-    description: 'Identificación de Usuarios',
+    description: 'Verificacion de codigo',
     content: {'application/json': {schema: getModelSchemaRef(Object)}},
   })
-  async autentiticar(@param.path.string('code') code: number): Promise<Object> {
+  async autentiticar(
+    @param.path.string('codigo') code: number,
+  ): Promise<object> {
     try {
       // let token = await this.servicioSeguridad.identificarUsuario(credenciales)
       // return token
-      return this.servicioSeguridad.ValidarCodigo(code)
+      return this.servicioSeguridad.ValidarCodigo(code);
     } catch (err) {
-      throw new HttpErrors[400](`Error de ingreso a la validación del código.`)
+      throw new HttpErrors[400](`Error de ingreso a la validación del código.`);
     }
   }
 
@@ -265,5 +270,4 @@ export class UsuarioController {
   }
 
   /*  */
-
 }

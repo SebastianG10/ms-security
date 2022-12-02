@@ -1,4 +1,4 @@
-import { /* inject, */ BindingScope, injectable, service} from '@loopback/core';
+import {/* inject, */ BindingScope, injectable, service} from '@loopback/core';
 import {repository} from '@loopback/repository';
 import {HttpErrors} from '@loopback/rest';
 import fetch from 'node-fetch';
@@ -7,6 +7,7 @@ import {CredencialesLogin, CredencialesRecuperarClave} from '../models';
 import {Codigo2FaRepository, UsuarioRepository} from '../repositories';
 import {JwtService} from './jwt.service';
 var generator = require('generate-password');
+var generateCode = require('password-generator');
 var MD5 = require('crypto-js/md5');
 
 @injectable({scope: BindingScope.TRANSIENT})
@@ -20,7 +21,7 @@ export class SeguridadUsuarioService {
 
     @service(JwtService)
     private servicioJwt: JwtService,
-  ) { }
+  ) {}
 
   // TODO?[01]: Creación de validación de usuario para el ingreso al sistema.
   /**
@@ -37,8 +38,8 @@ export class SeguridadUsuarioService {
         correo: '',
         rol: '',
         id: '',
-      }
-    }
+      },
+    };
 
     let usuarioValido = await this.usuarioRepository.findOne({
       where: {
@@ -57,17 +58,15 @@ export class SeguridadUsuarioService {
       try {
         let tk = this.servicioJwt.crearToken(datos);
         console.log('res1', res);
-        res.token = tk
-        res.user = datos
+        res.token = tk;
+        res.user = datos;
         console.log('res2', res);
-
       } catch (err) {
         throw err;
       }
     }
     return res;
   }
-
 
   /**
    * Genera una clave aleatoria
@@ -85,16 +84,13 @@ export class SeguridadUsuarioService {
   }
 
   /**
-   * Genera una clave aleatoria
+   * método para generar un codigo aleatrorio de 6 digitos
    * @returns clave generada
    */
-  CrearCodigoAleatorio(): string {
-    let code = generator.generate({
-      length: 4,
-      numbers: true,
-    });
-    // console.log(password);
-    return code;
+  CrearCodigoAleatorio(): number {
+    let codigo = Number(generateCode(4, false, /\d/));
+    console.log(typeof codigo);
+    return codigo;
   }
 
   CifrarCadena(cadena: string): string {
@@ -149,51 +145,48 @@ export class SeguridadUsuarioService {
 
   /* Métodos para el doble factor de autenticación */
 
-
   /**
    * verifica el usuario y le envia el codigo
    * @param credenciales credenciales de login
    * @returns
    */
   async envioCodigo(credenciales: CredencialesLogin): Promise<boolean> {
-    const params = new URLSearchParams()
-    let res = ""
+    const params = new URLSearchParams();
+    let res = '';
 
     let usuario = await this.usuarioRepository.findOne({
       where: {
-        email: credenciales.correo,
-        clave: credenciales.clave
-      }
-    }
-    );
+        correo: credenciales.correo,
+      },
+    });
 
     if (usuario) {
       //Generación del código
       let codigoAleatorio = this.CrearCodigoAleatorio();
       //Guardar codigo en la base de datos
       let codigo = {
-        "id_usuario": usuario._id,
-        "codigo": codigoAleatorio,
-        "estado": true
-      }
+        idUsuario: usuario._id,
+        codigo: codigoAleatorio,
+        estado: true,
+      };
 
-      let resPostCodigo = ''
+      let resPostCodigo = '';
 
       await fetch(Keys.url2FA, {
         method: 'POST',
         body: JSON.stringify(codigo),
-        headers: {"Content-Type": "application/json"}
+        headers: {'Content-Type': 'application/json'},
       }).then(async (res: any) => {
-        resPostCodigo = await res.text()
-        console.log("codigo de verificación: " + codigoAleatorio)
-        console.log("resPostCodigo: " + resPostCodigo)
+        resPostCodigo = await res.text();
+        console.log('codigo de verificación: ' + codigoAleatorio);
+        console.log('resPostCodigo: ' + resPostCodigo);
       });
 
       // envio del codigo
       let mensaje = {
-        "mensaje": `Hola ${usuario.nombres}, tu codigo de verificion es`,
-        "codigo": `${codigoAleatorio}`
-      }
+        mensaje: `Hola ${usuario.nombres}, tu codigo de verificion es`,
+        codigo: `${codigoAleatorio}`,
+      };
       console.log(mensaje);
 
       let r = '';
@@ -202,19 +195,22 @@ export class SeguridadUsuarioService {
       params.append('destination', usuario.correo);
       params.append('subject', Keys.mensaje2FA);
       params.append('message', JSON.stringify(mensaje));
-      console.log(params)
+      console.log(params);
 
-      await fetch(Keys.urlEnviarCorreo, {method: 'POST', body: params}).then(async (res: any) => {
-        r = await res.text()
-        console.log("r: " + r)
-      });
+      await fetch(Keys.urlEnviarCorreo, {method: 'POST', body: params}).then(
+        async (res: any) => {
+          r = await res.text();
+          console.log('r: ' + r);
+        },
+      );
 
-      return r == "OK";
+      return r == 'OK';
     } else {
-      throw new HttpErrors[400]("El usuario o la contraseña ingresada son invalidos.");
+      throw new HttpErrors[400](
+        'El usuario o la contraseña ingresada son invalidos.',
+      );
     }
   }
-
 
   /**
    * valida el codigo de doble factor
@@ -227,6 +223,7 @@ export class SeguridadUsuarioService {
         codigo: codigo,
       },
     });
+    console.log(code);
     if (code && code.estado) {
       let usuario = await this.usuarioRepository.findOne({
         where: {
@@ -242,27 +239,24 @@ export class SeguridadUsuarioService {
           correo: usuario.correo,
           rol: usuario.rolId,
           // isLogged: false
-        }
+        };
         try {
           code.estado = false;
-          this.codigo2FARepositorio.updateById(code._id, code)
+          this.codigo2FARepositorio.updateById(code._id, code);
           let respuesta = {
             Token: this.servicioJwt.crearToken(datos),
-            User: datos
-          }
+            User: datos,
+          };
           console.log(respuesta);
           return respuesta;
         } catch (err) {
           throw err;
         }
       } else {
-        return {error: "Usuario no registrado"}
+        return {error: 'Usuario no registrado'};
       }
     } else {
-      return {error: "El código es invalido"}
+      return {error: 'El código es invalido'};
     }
   }
-
 }
-
-

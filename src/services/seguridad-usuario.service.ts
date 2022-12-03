@@ -157,6 +157,7 @@ export class SeguridadUsuarioService {
     let usuario = await this.usuarioRepository.findOne({
       where: {
         correo: credenciales.correo,
+        clave: credenciales.clave,
       },
     });
 
@@ -183,21 +184,18 @@ export class SeguridadUsuarioService {
       });
 
       // envio del codigo
-      let mensaje = {
-        mensaje: `Hola ${usuario.nombres}, tu codigo de verificion es`,
-        codigo: `${codigoAleatorio}`,
-      };
+      let mensaje = `Codigo de verificion: ${codigoAleatorio}`;
       console.log(mensaje);
 
       let r = '';
 
       params.append('hash_validator', 'Admin@notification.sender');
-      params.append('destination', usuario.correo);
-      params.append('subject', Keys.mensaje2FA);
-      params.append('message', JSON.stringify(mensaje));
+      params.append('message', mensaje);
+      params.append('destination', '+57' + usuario.celular);
+
       console.log(params);
 
-      await fetch(Keys.urlEnviarCorreo, {method: 'POST', body: params}).then(
+      await fetch(Keys.urlEnviarSMS, {method: 'POST', body: params}).then(
         async (res: any) => {
           r = await res.text();
           console.log('r: ' + r);
@@ -238,7 +236,7 @@ export class SeguridadUsuarioService {
           nombre: `${usuario.nombres} ${usuario.apellidos}`,
           correo: usuario.correo,
           rol: usuario.rolId,
-          // isLogged: false
+          // isLogged: falsez
         };
         try {
           code.estado = false;
@@ -247,7 +245,6 @@ export class SeguridadUsuarioService {
             Token: this.servicioJwt.crearToken(datos),
             User: datos,
           };
-          console.log(respuesta);
           return respuesta;
         } catch (err) {
           throw err;

@@ -185,30 +185,11 @@ export class UsuarioController {
     credenciales: CredencialesLogin,
   ): Promise<boolean> {
     try {
-      // let token = await this.servicioSeguridad.identificarUsuario(credenciales)
-      // return token
       return this.servicioSeguridad.envioCodigo(credenciales);
     } catch (err) {
       throw new HttpErrors[400](
         `Se ha generado un error en la validación de las credenciales para el usuario ${credenciales.correo}`,
       );
-    }
-  }
-
-  @post('/verificacion2fa/{codigo}')
-  @response(200, {
-    description: 'Verificacion de codigo',
-    content: {'application/json': {schema: getModelSchemaRef(Object)}},
-  })
-  async autentiticar(
-    @param.path.string('codigo') code: number,
-  ): Promise<object> {
-    try {
-      // let token = await this.servicioSeguridad.identificarUsuario(credenciales)
-      // return token
-      return this.servicioSeguridad.ValidarCodigo(code);
-    } catch (err) {
-      throw new HttpErrors[400](`Error de ingreso a la validación del código.`);
     }
   }
 
@@ -235,6 +216,21 @@ export class UsuarioController {
       throw new HttpErrors[400](
         `Se ha generado un error en la recuperación de la clave para el correo ${credenciales.correo}`,
       );
+    }
+  }
+
+  @post('/verificacion2fa/{codigo}')
+  @response(200, {
+    description: 'Verificacion de codigo',
+    content: {'application/json': {schema: getModelSchemaRef(Object)}},
+  })
+  async autentiticar(
+    @param.path.string('codigo') code: number,
+  ): Promise<object> {
+    try {
+      return this.servicioSeguridad.ValidarCodigo(code);
+    } catch (err) {
+      throw new HttpErrors[400](`Error de ingreso a la validación del código.`);
     }
   }
 
